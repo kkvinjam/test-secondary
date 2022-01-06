@@ -1,0 +1,61 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  AWSOrganizationId:
+    Type: String
+    Description: AWS Organization ID to share the resources with. Obtain from 'aws organizations describe-organization'
+#    Default: <Organization ID>
+    MinLength: 12
+    MaxLength: 12
+  ManagementAccountId:
+    Type: String
+    Description: Control Tower Management Account ID
+#    Default: <Management Account ID>
+    MinLength: 12
+    MaxLength: 12
+  PrivateAmazonASN:
+    Type: String
+    Description: A private Autonomous System Number (ASN) for the Amazon side of a BGP session.
+    Default: 64512
+    MinLength: 5
+    MaxLength: 10
+    ConstraintDescription: The range is 64512 to 65534 for 16-bit ASNs and 4200000000 to 4294967294 for 32-bit ASNs.
+
+Resources:
+  myTransitGateway:
+    Type: "AWS::EC2::TransitGateway"
+    Properties:
+      Description: "TGW Route Integration Test"
+      AmazonSideAsn: !Ref PrivateAmazonASN
+      AutoAcceptSharedAttachments: "enable"
+      DefaultRouteTableAssociation: "enable"
+      DefaultRouteTablePropagation: "enable"
+      DnsSupport: "enable"
+      VpnEcmpSupport: "enable"
+      Tags:
+      - Key: Application
+        Value: !Ref 'AWS::StackId'
+      - Key: Name
+        Value: myTransitGateway
+  myResourceShare:
+    DependsOn: myTransitGateway
+    Type: "AWS::RAM::ResourceShare"
+    Properties:
+      Name: "My Resource Share"
+      ResourceArns:
+        - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:transit-gateway/${myTransitGateway}"
+      Principals:
+        - !Sub "arn:aws:organizations::${ManagementAccountId}:organization/${AWSOrganizationId}"
+  mySSMOrgVariable:
+    DependsOn: myTransitGateway
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Description: "SSM Parameter of type StringList"
+      Name: "TGWID"
+      Type: "String"
+      Value: !Ref myTransitGateway
+
+Outputs:
+  myTransitGateway:
+    Description: Transit Gateway Name
+    Value: !Ref myTransitGateway
